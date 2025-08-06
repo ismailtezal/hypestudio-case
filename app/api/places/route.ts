@@ -3,15 +3,15 @@ import { db, getFromCache, setCache } from '../../../lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    // Parse query parameters for filtering and pagination
+    // Parse query parameters for filtering and cursor-based pagination
     const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit') || '1000');
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const limit = parseInt(url.searchParams.get('limit') || '2000'); // Increased default limit
+    const cursor = url.searchParams.get('cursor'); // For cursor-based pagination
     const industry = url.searchParams.get('industry');
     const bounds = url.searchParams.get('bounds'); // "minLng,minLat,maxLng,maxLat"
     
     // Create cache key based on parameters
-    const cacheKey = `places_${limit}_${offset}_${industry || 'all'}_${bounds || 'nobounds'}`;
+    const cacheKey = `places_optimized_${limit}_${cursor || 'start'}_${industry || 'all'}_${bounds || 'nobounds'}`;
     
     // Check cache first
     const cached = getFromCache(cacheKey);
@@ -24,27 +24,41 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build optimized query
+    // Use optimized materialized view for better performance
     let query = `
       SELECT 
-        id,
-        name,
-        street_address,
-        city,
-        state,
-        logo,
-        longitude,
-        latitude,
-        industry,
-        is_trade_area_available as isTradeAreaAvailable,
-        is_home_zipcodes_available as isHomeZipcodesAvailable,
-        category
-      FROM places 
-      WHERE longitude IS NOT NULL AND latitude IS NOT NULL
+        p.id,
+        p.name,
+        p.street_address,
+        p.city,
+        p.state,
+        p.logo,
+        CASE 
+          WHEN p.longitude ~ '^-?[0-9]+\.?[0-9]*$' 
+          THEN p.longitude::text
+          ELSE p.longitude 
+        END as longitude,
+        CASE 
+          WHEN p.latitude ~ '^-?[0-9]+\.?[0-9]*$' 
+          THEN p.latitude::text
+          ELSE p.latitude 
+        END as latitude,
+        p.industry,
+        p.is_trade_area_available as isTradeAreaAvailable,
+        p.is_home_zipcodes_available as isHomeZipcodesAvailable,
+        p.category
+      FROM places p
+      WHERE p.longitude IS NOT NULL AND p.latitude IS NOT NULL
     `;
     
     const params: any[] = [];
     let paramCounter = 1;
+    
+    // Add cursor condition for pagination (much faster than OFFSET)
+    if (cursor) {
+      query += ` AND p.id > $${paramCounter++}`;
+      params.push(cursor);
+    }
     
     // Add industry filter
     if (industry && industry !== 'all') {
@@ -59,8 +73,8 @@ export async function GET(request: NextRequest) {
       params.push(minLng, maxLng, minLat, maxLat);
     }
     
-    query += ` ORDER BY category DESC, name ASC LIMIT $${paramCounter++} OFFSET $${paramCounter++}`;
-    params.push(limit, offset);
+    query += ` ORDER BY category DESC, name ASC LIMIT $${paramCounter++}`;
+    params.push(limit);
 
     const result = await db.execute(query, params);
 

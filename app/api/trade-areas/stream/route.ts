@@ -5,9 +5,10 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const pid = url.searchParams.get('pid');
   const tradeArea = url.searchParams.get('trade_area');
-  const batchSize = parseInt(url.searchParams.get('batch_size') || '250');
+  const batchSize = parseInt(url.searchParams.get('batch_size') || '500'); // Increased batch size
+  const cursor = url.searchParams.get('cursor'); // For cursor-based pagination
   
-  console.log('🌊 Starting streaming response for trade areas...');
+  console.log('🚀 Starting optimized streaming response for trade areas...');
   
   const encoder = new TextEncoder();
   
@@ -18,10 +19,18 @@ export async function GET(request: NextRequest) {
         // Start JSON array response
         controller.enqueue(encoder.encode('['));
         
+        // Build optimized query with cursor-based pagination
         let query = 'SELECT pid, polygon, trade_area FROM trade_areas';
         const params: any[] = [];
         const conditions: string[] = [];
         let paramCounter = 1;
+
+        // Add cursor condition for pagination (much faster than OFFSET)
+        if (cursor) {
+          const [cursorPid, cursorTradeArea] = cursor.split(',');
+          conditions.push(`(pid > $${paramCounter++} OR (pid = $${paramCounter++} AND trade_area > $${paramCounter++}))`);
+          params.push(parseInt(cursorPid), parseInt(cursorPid), parseInt(cursorTradeArea));
+        }
 
         if (pid) {
           conditions.push(`pid = $${paramCounter++}`);
@@ -37,26 +46,57 @@ export async function GET(request: NextRequest) {
           query += ' WHERE ' + conditions.join(' AND ');
         }
 
+        // Critical: Order by indexed columns for optimal performance
         query += ' ORDER BY pid ASC, trade_area ASC';
         
-        let offset = 0;
+        let lastPid: number | null = null;
+        let lastTradeArea: number | null = null;
         let isFirst = true;
         let totalFeatures = 0;
         
-        console.log(`📦 Processing in batches of ${batchSize}...`);
+        console.log(`⚡ Processing with cursor-based pagination, batch size: ${batchSize}...`);
         
         while (true) {
-          const batchQuery = `${query} LIMIT ${batchSize} OFFSET ${offset}`;
+          // Build cursor-based query (no OFFSET - much faster!)
+          let batchQuery = query;
+          let batchParams = [...params];
+          
+          if (lastPid !== null && lastTradeArea !== null) {
+            // Add cursor condition for next batch
+            const cursorCondition = `(pid > $${batchParams.length + 1} OR (pid = $${batchParams.length + 2} AND trade_area > $${batchParams.length + 3}))`;
+            
+            if (batchQuery.includes('WHERE')) {
+              // Find the ORDER BY clause and insert cursor condition before it
+              const orderByIndex = batchQuery.indexOf('ORDER BY');
+              const beforeOrderBy = batchQuery.substring(0, orderByIndex);
+              const orderByClause = batchQuery.substring(orderByIndex);
+              batchQuery = `${beforeOrderBy} AND ${cursorCondition} ${orderByClause}`;
+            } else {
+              // Insert cursor condition before ORDER BY
+              const orderByIndex = batchQuery.indexOf('ORDER BY');
+              const beforeOrderBy = batchQuery.substring(0, orderByIndex);
+              const orderByClause = batchQuery.substring(orderByIndex);
+              batchQuery = `${beforeOrderBy} WHERE ${cursorCondition} ${orderByClause}`;
+            }
+            
+            batchParams.push(lastPid, lastPid, lastTradeArea);
+          }
+          
+          batchQuery += ` LIMIT ${batchSize}`;
+          
+          // Debug: Log the generated query
+          console.log(`🔍 Generated query:`, batchQuery);
+          console.log(`🔍 Query params:`, batchParams);
           
           try {
-            const result = await db.execute(batchQuery, params);
+            const result = await db.execute(batchQuery, batchParams);
             
             if (result.rows.length === 0) {
               console.log('✅ No more data to stream');
               break;
             }
             
-            console.log(`📊 Streaming batch: ${offset + 1}-${offset + result.rows.length} features`);
+            console.log(`⚡ Streaming batch: ${result.rows.length} features (cursor: ${lastPid || 'start'},${lastTradeArea || 'start'})`);
             
             for (const row of result.rows) {
               // Validate row data before streaming
@@ -103,14 +143,16 @@ export async function GET(request: NextRequest) {
               isFirst = false;
               totalFeatures++;
               
+              // Update cursor for next iteration
+              lastPid = row.pid;
+              lastTradeArea = row.trade_area;
+              
               // Stream each feature immediately
               controller.enqueue(encoder.encode(prefix + JSON.stringify(feature)));
               
               // Optional: Add artificial delay to prevent overwhelming the client
               // await new Promise(resolve => setTimeout(resolve, 1));
             }
-            
-            offset += batchSize;
             
             // If we got fewer rows than batch size, we're done
             if (result.rows.length < batchSize) {
