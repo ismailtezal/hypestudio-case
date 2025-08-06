@@ -1,15 +1,17 @@
 import React from 'react';
 import { ScatterplotLayer, PolygonLayer, IconLayer } from 'deck.gl';
 import { useUIStore } from '../stores';
-import { useMyPlace, useHomeZipcodes } from './useData';
+import { useHomeZipcodes } from './useData';
 import { useProgressData } from './useProgressData';
 import { COLORS, isValidCoordinate } from '../lib/utils';
 import { Place } from '../types';
 
 export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number) => void) => {
   const { places, tradeAreas, zipcodes } = useProgressData();
-  const { data: myPlace } = useMyPlace();
   const { data: homeZipcodes = [] } = useHomeZipcodes();
+  
+  // Get myPlace from places array - myPlace comes first in the array from fetchAllPlaces
+  const myPlace = places.length > 0 ? places[0] : null;
   const { 
     placeAnalysis,
     customerAnalysis,
@@ -21,11 +23,15 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
 
   const layers = React.useMemo(() => {
     console.log('=== Rendering Layers ===');
+    console.log('places:', places);
+    console.log('places length:', places?.length);
+    console.log('myPlace (first item):', myPlace);
+    console.log('competitors (rest):', places?.slice(1));
     console.log('customerAnalysis:', customerAnalysis);
+    console.log('placeAnalysis:', placeAnalysis);
     console.log('visibleTradeAreas:', visibleTradeAreas);
     console.log('tradeAreas length:', tradeAreas.length);
     console.log('tradeAreas sample:', tradeAreas.slice(0, 2));
-    console.log('myPlace:', myPlace);
     
     // Validate data before proceeding
     if (!Array.isArray(tradeAreas)) {
@@ -306,12 +312,49 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
       });
     }
 
-    // Regular Places (Pinpoints) Layer - excluding myPlace
-    const regularPlaces = filteredPlaces.filter(place => 
-      isValidCoordinate(place.longitude, place.latitude) && place.id !== myPlace?.id
-    );
+    // Regular Places (Pinpoints) Layer - excluding myPlace (first item in array)
+    const regularPlaces = filteredPlaces.slice(1).filter(place => {
+      // Convert string coordinates to numbers
+      const lng = typeof place.longitude === 'string' ? parseFloat(place.longitude) : place.longitude;
+      const lat = typeof place.latitude === 'string' ? parseFloat(place.latitude) : place.latitude;
+      return isValidCoordinate(lng, lat);
+    });
+    
+    console.log('🔍 Regular places after filtering:', regularPlaces.length);
+    
+    // Convert myPlace coordinates to numbers for validation
+    const myPlaceLng = myPlace && typeof myPlace.longitude === 'string' ? parseFloat(myPlace.longitude) : myPlace?.longitude;
+    const myPlaceLat = myPlace && typeof myPlace.latitude === 'string' ? parseFloat(myPlace.latitude) : myPlace?.latitude;
+    
+    console.log('🔍 Sample myPlace coordinates:', {
+      longitude: myPlace?.longitude,
+      latitude: myPlace?.latitude,
+      converted: {
+        lng: myPlaceLng,
+        lat: myPlaceLat
+      },
+      types: {
+        lng: typeof myPlace?.longitude,
+        lat: typeof myPlace?.latitude
+      },
+      validation: myPlace ? isValidCoordinate(myPlaceLng, myPlaceLat) : false
+    });
+    console.log('🔍 First 3 competitors coordinates:', regularPlaces.slice(0, 3).map(p => ({ 
+      id: p.id, 
+      name: p.name, 
+      originalCoords: [p.longitude, p.latitude],
+      convertedCoords: [
+        typeof p.longitude === 'string' ? parseFloat(p.longitude) : p.longitude,
+        typeof p.latitude === 'string' ? parseFloat(p.latitude) : p.latitude
+      ],
+      types: {
+        lng: typeof p.longitude,
+        lat: typeof p.latitude
+      }
+    })));
     
     if (regularPlaces.length > 0) {
+      console.log('✅ Creating ScatterplotLayer for', regularPlaces.length, 'places');
       layerList.push(
         new ScatterplotLayer({
           id: 'places',
@@ -324,7 +367,13 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           radiusMinPixels: 8,
           radiusMaxPixels: 20,
           lineWidthMinPixels: 2,
-          getPosition: (d: Place) => [d.longitude, d.latitude],
+          getPosition: (d: Place) => {
+            // Convert string coordinates to numbers
+            const lng = typeof d.longitude === 'string' ? parseFloat(d.longitude) : d.longitude;
+            const lat = typeof d.latitude === 'string' ? parseFloat(d.latitude) : d.latitude;
+            console.log('🎯 Getting position for place:', d.name, [lng, lat]);
+            return [lng, lat];
+          },
           getRadius: 12,
           getFillColor: [102, 102, 102, 255],
           getLineColor: [255, 255, 255, 255],
@@ -337,10 +386,13 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           },
         })
       );
+    } else {
+      console.log('❌ No regular places to render');
     }
 
     // My Place Icon Layer - with home icon for better visibility
-    if (myPlace && isValidCoordinate(myPlace.longitude, myPlace.latitude)) {
+    if (myPlace && isValidCoordinate(myPlaceLng, myPlaceLat)) {
+      console.log('🏠 Creating MyPlace icon layer for:', myPlace.name, [myPlaceLng, myPlaceLat]);
       layerList.push(
         new IconLayer({
           id: 'my-place-icon',
@@ -355,7 +407,13 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             home: { x: 0, y: 0, width: 64, height: 64 }
           },
           getIcon: () => 'home',
-          getPosition: (d: Place) => [d.longitude, d.latitude],
+          getPosition: (d: Place) => {
+            // Convert string coordinates to numbers
+            const lng = typeof d.longitude === 'string' ? parseFloat(d.longitude) : d.longitude;
+            const lat = typeof d.latitude === 'string' ? parseFloat(d.latitude) : d.latitude;
+            console.log('🏠 Getting position for myPlace:', d.name, [lng, lat]);
+            return [lng, lat];
+          },
           getSize: 40, // Large size for visibility
           getColor: [255, 69, 0, 255], // Orange-red color
           updateTriggers: {
@@ -369,6 +427,12 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           },
         })
       );
+    } else {
+      console.log('❌ Cannot create myPlace layer:', {
+        myPlace: !!myPlace,
+        validCoords: myPlace ? isValidCoordinate(myPlaceLng, myPlaceLat) : false,
+        coords: myPlace ? [myPlaceLng, myPlaceLat] : null
+      });
     }
 
     return layerList;
