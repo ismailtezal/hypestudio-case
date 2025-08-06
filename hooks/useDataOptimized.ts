@@ -194,7 +194,7 @@ export const useAllData = () => {
             }
             
             const data = JSON.parse(result);
-            return data.features || [];
+            return data || []; // Return the array directly
           } else {
             // Fallback to regular API with pagination
             const fallbackResponse = await fetch(`${API_ENDPOINTS.tradeAreas}?limit=1000`);

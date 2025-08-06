@@ -10,19 +10,24 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// PostgreSQL client for direct database operations with performance optimizations
+// Optimized PostgreSQL connection pool for large datasets
 export const pgPool = new Pool({
   connectionString: databaseUrl,
-  max: 20,
+  // Increased connection pool for better concurrency
+  max: 25,
+  min: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  // Performance optimizations for large datasets
-  statement_timeout: 60000, // 60 seconds
-  query_timeout: 60000,     // 60 seconds
+  // Performance optimizations for large JSONB datasets
+  statement_timeout: 120000, // 2 minutes for large queries
+  query_timeout: 120000,     // 2 minutes
+  application_name: 'hypestudio-trade-areas',
+  // Connection-level optimizations
+  options: '-c default_statistics_target=1000 -c random_page_cost=1.1 -c effective_cache_size=1GB',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// Database interface that matches your existing API
+// Enhanced database interface with prepared statements support
 export const db = {
   async execute(sql: string, params?: any[]) {
     const client = await pgPool.connect();
@@ -32,6 +37,32 @@ export const db = {
         rows: result.rows,
         rowCount: result.rowCount,
       };
+    } finally {
+      client.release();
+    }
+  },
+
+  // New method for prepared statements (better performance for repeated queries)
+  async executePrepared(name: string, sql: string, params?: any[]) {
+    const client = await pgPool.connect();
+    try {
+      // Prepare statement if not already prepared
+      await client.query(`PREPARE ${name} AS ${sql}`);
+      const result = await client.query(`EXECUTE ${name}(${params?.map((_, i) => `$${i + 1}`).join(',') || ''})`, params);
+      return {
+        rows: result.rows,
+        rowCount: result.rowCount,
+      };
+    } catch (error) {
+      // If statement already exists, just execute it
+      if ((error as any).code === '42P05') {
+        const result = await client.query(`EXECUTE ${name}(${params?.map((_, i) => `$${i + 1}`).join(',') || ''})`, params);
+        return {
+          rows: result.rows,
+          rowCount: result.rowCount,
+        };
+      }
+      throw error;
     } finally {
       client.release();
     }

@@ -51,11 +51,18 @@ const MapView: React.FC = React.memo(() => {
     const id = setTimeout(() => ui.updateLegend(), 80);
 
     if (
-      myPlace.longitude &&
-      myPlace.latitude &&
+      myPlace?.longitude &&
+      myPlace?.latitude &&
+      typeof myPlace.longitude === 'number' &&
+      typeof myPlace.latitude === 'number' &&
+      !isNaN(myPlace.longitude) &&
+      !isNaN(myPlace.latitude) &&
+      myPlace.longitude >= -180 && myPlace.longitude <= 180 &&
+      myPlace.latitude >= -90 && myPlace.latitude <= 90 &&
       viewState.longitude === -122.4194 &&
       viewState.latitude === 37.7749
     ) {
+      console.log('🗺️ Setting viewState to myPlace coordinates:', myPlace.longitude, myPlace.latitude);
       ui.setViewState({
         longitude: myPlace.longitude,
         latitude: myPlace.latitude,
@@ -89,7 +96,18 @@ const MapView: React.FC = React.memo(() => {
   ]);
 
   const handleViewStateChange = React.useCallback(({ viewState: vs }: any) => {
-    setViewState(vs);
+    // Add safety checks for deck.gl MapState assertions
+    if (vs && 
+        typeof vs.longitude === 'number' && 
+        typeof vs.latitude === 'number' && 
+        !isNaN(vs.longitude) && 
+        !isNaN(vs.latitude) &&
+        vs.longitude >= -180 && vs.longitude <= 180 &&
+        vs.latitude >= -90 && vs.latitude <= 90) {
+      setViewState(vs);
+    } else {
+      console.warn('Invalid viewState received:', vs);
+    }
   }, [setViewState]);
 
   if (isLoading) {
@@ -222,11 +240,11 @@ const MapView: React.FC = React.memo(() => {
     <Box sx={{ position: 'relative', width: '100%', height: '100vh' }}>
       <DeckGL
         initialViewState={{
-          longitude: viewState.longitude,
-          latitude: viewState.latitude,
-          zoom: viewState.zoom,
-          pitch: viewState.pitch,
-          bearing: viewState.bearing,
+          longitude: typeof viewState.longitude === 'number' && !isNaN(viewState.longitude) ? viewState.longitude : -122.4194,
+          latitude: typeof viewState.latitude === 'number' && !isNaN(viewState.latitude) ? viewState.latitude : 37.7749,
+          zoom: typeof viewState.zoom === 'number' && !isNaN(viewState.zoom) ? viewState.zoom : 11,
+          pitch: typeof viewState.pitch === 'number' && !isNaN(viewState.pitch) ? viewState.pitch : 0,
+          bearing: typeof viewState.bearing === 'number' && !isNaN(viewState.bearing) ? viewState.bearing : 0,
         } as any}
         onViewStateChange={handleViewStateChange}
         controller

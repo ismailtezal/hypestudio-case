@@ -1,12 +1,13 @@
 import React from 'react';
 import { ScatterplotLayer, PolygonLayer, IconLayer } from 'deck.gl';
 import { useUIStore } from '../stores';
-import { useAllData, useMyPlace, useHomeZipcodes } from './useData';
+import { useMyPlace, useHomeZipcodes } from './useData';
+import { useProgressData } from './useProgressData';
 import { COLORS, isValidCoordinate } from '../lib/utils';
 import { Place } from '../types';
 
 export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number) => void) => {
-  const { places, tradeAreas, zipcodes } = useAllData();
+  const { places, tradeAreas, zipcodes } = useProgressData();
   const { data: myPlace } = useMyPlace();
   const { data: homeZipcodes = [] } = useHomeZipcodes();
   const { 
@@ -23,7 +24,24 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
     console.log('customerAnalysis:', customerAnalysis);
     console.log('visibleTradeAreas:', visibleTradeAreas);
     console.log('tradeAreas length:', tradeAreas.length);
+    console.log('tradeAreas sample:', tradeAreas.slice(0, 2));
     console.log('myPlace:', myPlace);
+    
+    // Validate data before proceeding
+    if (!Array.isArray(tradeAreas)) {
+      console.error('❌ tradeAreas is not an array:', typeof tradeAreas, tradeAreas);
+      return [];
+    }
+    
+    if (!Array.isArray(places)) {
+      console.error('❌ places is not an array:', typeof places, places);
+      return [];
+    }
+    
+    if (!Array.isArray(zipcodes)) {
+      console.error('❌ zipcodes is not an array:', typeof zipcodes, zipcodes);
+      return [];
+    }
     
     const layerList = [];
 
@@ -181,12 +199,38 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
         }
 
         placeTradeAreas.forEach(tradeArea => {
+          // Validate trade area data before creating layer
+          if (!tradeArea || typeof tradeArea !== 'object') {
+            console.error('Invalid trade area object:', tradeArea);
+            return;
+          }
+          
+          if (tradeArea.pid === undefined || tradeArea.pid === null) {
+            console.error('Trade area missing pid:', tradeArea);
+            return;
+          }
+          
+          if (tradeArea.trade_area === undefined || tradeArea.trade_area === null) {
+            console.error('Trade area missing trade_area field:', tradeArea);
+            return;
+          }
+          
+          if (!tradeArea.polygon) {
+            console.error('Trade area missing polygon data:', tradeArea);
+            return;
+          }
+
           // Parse polygon to check structure
           let polygonData;
           try {
             polygonData = typeof tradeArea.polygon === 'string' ? JSON.parse(tradeArea.polygon) : tradeArea.polygon;
           } catch (e) {
             console.error('Failed to parse polygon for trade area:', tradeArea.trade_area, e);
+            return;
+          }
+          
+          if (!polygonData || !polygonData.type) {
+            console.error('Invalid polygon structure for trade area:', tradeArea.trade_area, polygonData);
             return;
           }
           
@@ -201,7 +245,7 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           layerList.push(
             new PolygonLayer({
               id: `trade-area-${placeId}-${tradeArea.trade_area}`,
-              data: [tradeArea],
+              data: [tradeArea].filter(Boolean), // Filter out any null/undefined values
               pickable: true,
               stroked: true,
               filled: true,
@@ -209,6 +253,12 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
               lineWidthMinPixels: 2,
               getPolygon: (d: any) => {
                 console.log('Getting polygon for:', d);
+                
+                // Validate that d is not null or undefined
+                if (!d) {
+                  console.error('Trade area data is null or undefined');
+                  return [];
+                }
                 
                 // Parse the polygon JSON string
                 let polygon;
@@ -224,9 +274,18 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
                   return [];
                 }
                 
+                // Validate polygon structure
                 if (polygon.type === 'Polygon') {
+                  if (!polygon.coordinates || !polygon.coordinates[0]) {
+                    console.error('Invalid Polygon coordinates:', polygon);
+                    return [];
+                  }
                   return polygon.coordinates[0];
                 } else if (polygon.type === 'MultiPolygon') {
+                  if (!polygon.coordinates || !polygon.coordinates[0] || !polygon.coordinates[0][0]) {
+                    console.error('Invalid MultiPolygon coordinates:', polygon);
+                    return [];
+                  }
                   return polygon.coordinates[0][0];
                 }
                 

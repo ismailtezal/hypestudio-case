@@ -5,6 +5,7 @@ import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import { Menu as MenuIcon, ViewList as LegendIcon } from '@mui/icons-material';
 import { useUIStore } from '../stores';
 import MapView from '../components/MapView';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import LeftSidebar from '../components/LeftSidebar';
 import RightSidebar from '../components/RightSidebar';
 
@@ -76,7 +77,9 @@ export default function Home() {
         </AppBar>
 
         <Box sx={{ flex: 1, position: 'relative' }}>
-          <MapView />
+          <MapErrorBoundary>
+            <MapView />
+          </MapErrorBoundary>
 
           <Box
             sx={{

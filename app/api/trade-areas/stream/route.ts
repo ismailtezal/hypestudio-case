@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
   const readableStream = new ReadableStream({
     async start(controller) {
       try {
-        // Start JSON response
-        controller.enqueue(encoder.encode('{"type":"FeatureCollection","features":['));
+        // Start JSON array response
+        controller.enqueue(encoder.encode('['));
         
         let query = 'SELECT pid, polygon, trade_area FROM trade_areas';
         const params: any[] = [];
@@ -59,13 +59,44 @@ export async function GET(request: NextRequest) {
             console.log(`📊 Streaming batch: ${offset + 1}-${offset + result.rows.length} features`);
             
             for (const row of result.rows) {
+              // Validate row data before streaming
+              if (!row || typeof row !== 'object') {
+                console.error('❌ Invalid row data:', row);
+                continue;
+              }
+              
+              if (row.pid === null || row.pid === undefined) {
+                console.error('❌ Row missing pid:', row);
+                continue;
+              }
+              
+              if (row.trade_area === null || row.trade_area === undefined) {
+                console.error('❌ Row missing trade_area:', row);
+                continue;
+              }
+              
+              if (!row.polygon) {
+                console.error('❌ Row missing polygon:', row);
+                continue;
+              }
+              
+              // Validate polygon structure
+              try {
+                const polygonTest = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
+                if (!polygonTest || !polygonTest.type) {
+                  console.error('❌ Invalid polygon structure:', polygonTest);
+                  continue;
+                }
+              } catch (e) {
+                console.error('❌ Failed to parse polygon for validation:', e);
+                continue;
+              }
+              
+              // Format data to match what deck.gl layers expect
               const feature = {
-                type: "Feature",
-                properties: {
-                  pid: row.pid,
-                  trade_area: row.trade_area
-                },
-                geometry: row.polygon // Already parsed as JSONB
+                pid: row.pid,
+                trade_area: row.trade_area,
+                polygon: row.polygon // Keep polygon as direct property for deck.gl compatibility
               };
               
               const prefix = isFirst ? '' : ',';
@@ -93,8 +124,8 @@ export async function GET(request: NextRequest) {
           }
         }
         
-        // Close JSON response
-        controller.enqueue(encoder.encode(`],"metadata":{"totalFeatures":${totalFeatures},"streamedAt":"${new Date().toISOString()}"}}`));
+        // Close JSON array response
+        controller.enqueue(encoder.encode(`]`));
         controller.close();
         
         console.log(`✅ Streaming completed! Total features: ${totalFeatures}`);
@@ -110,8 +141,7 @@ export async function GET(request: NextRequest) {
         };
         
         try {
-          controller.enqueue(encoder.encode(']}'));
-          controller.enqueue(encoder.encode(`,"error":${JSON.stringify(errorResponse)}`));
+          controller.enqueue(encoder.encode(']'));
         } catch (e) {
           console.error('Failed to send error response:', e);
         }

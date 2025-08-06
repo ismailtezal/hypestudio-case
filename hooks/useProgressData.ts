@@ -77,7 +77,10 @@ const fetchTradeAreasWithProgress = async (
       // Fallback if streaming not supported
       onProgress(50, 'Processing trade areas data...');
       const data = await response.json();
-      const features = data.features || data || [];
+      console.log('📊 Fallback data type:', typeof data);
+      console.log('📊 Fallback data sample:', data);
+      const features = Array.isArray(data) ? data : (data.features || data || []); // Handle both array and object responses
+      console.log('📊 Fallback features count:', features.length);
       onProgress(100, `Loaded ${features.length} trade areas successfully`);
       return features;
     }
@@ -86,12 +89,20 @@ const fetchTradeAreasWithProgress = async (
     let receivedData = '';
     let receivedBytes = 0;
     
+    console.log('📡 Starting to read streaming data...');
+    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       
       receivedBytes += value.length;
-      receivedData += decoder.decode(value, { stream: false });
+      const chunk = decoder.decode(value, { stream: false });
+      receivedData += chunk;
+      
+      // Debug first few chunks
+      if (receivedBytes < 5000) {
+        console.log('📡 Chunk received:', chunk.substring(0, 100));
+      }
       
       // Calculate progress based on bytes received
       let progress;
@@ -109,8 +120,21 @@ const fetchTradeAreasWithProgress = async (
     
     onProgress(95, 'Processing JSON data...');
     
-    const data = JSON.parse(receivedData);
-    const features = data.features || data || [];
+    console.log('📊 Raw received data length:', receivedData.length);
+    console.log('📊 First 200 chars:', receivedData.substring(0, 200));
+    console.log('📊 Last 200 chars:', receivedData.substring(receivedData.length - 200));
+    
+    let features;
+    try {
+      const data = JSON.parse(receivedData);
+      features = Array.isArray(data) ? data : (data.features || data || []);
+      console.log('📊 Parsed features count:', features.length);
+      console.log('📊 Sample feature:', features[0]);
+    } catch (parseError) {
+      console.error('❌ JSON Parse Error:', parseError);
+      console.error('❌ Problematic data:', receivedData.substring(0, 500));
+      throw new Error(`Failed to parse trade areas data: ${parseError}`);
+    }
     
     onProgress(100, `Loaded ${features.length} trade areas successfully`);
     return features;
