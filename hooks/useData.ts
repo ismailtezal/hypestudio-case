@@ -53,7 +53,8 @@ const fetchAllPlaces = async (): Promise<Place[]> => {
 };
 
 const fetchTradeAreas = async (): Promise<TradeArea[]> => {
-  const response = await fetch(API_ENDPOINTS.tradeAreas);
+  // Use pagination to avoid timeouts
+  const response = await fetch(`${API_ENDPOINTS.tradeAreas}?limit=1000`);
   if (!response.ok) {
     throw new Error('Failed to fetch trade areas');
   }

@@ -10,12 +10,16 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// PostgreSQL client for direct database operations
+// PostgreSQL client for direct database operations with performance optimizations
 export const pgPool = new Pool({
   connectionString: databaseUrl,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
+  // Performance optimizations for large datasets
+  statement_timeout: 60000, // 60 seconds
+  query_timeout: 60000,     // 60 seconds
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 // Database interface that matches your existing API

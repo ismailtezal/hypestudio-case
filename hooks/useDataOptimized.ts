@@ -175,10 +175,33 @@ export const useAllData = () => {
       {
         queryKey: ['trade-areas'],
         queryFn: async () => {
-          const response = await fetch(API_ENDPOINTS.tradeAreas);
+          // Use streaming endpoint for large datasets
+          const response = await fetch('/api/trade-areas/stream?batch_size=500');
           if (!response.ok) throw new Error('Failed to fetch trade areas');
-          const data = await response.json();
-          return data.features;
+          
+          // Handle streaming response
+          if (response.headers.get('content-type')?.includes('application/json')) {
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let result = '';
+            
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                result += decoder.decode(value, { stream: true });
+              }
+            }
+            
+            const data = JSON.parse(result);
+            return data.features || [];
+          } else {
+            // Fallback to regular API with pagination
+            const fallbackResponse = await fetch(`${API_ENDPOINTS.tradeAreas}?limit=1000`);
+            if (!fallbackResponse.ok) throw new Error('Failed to fetch trade areas');
+            const data = await fallbackResponse.json();
+            return data.features;
+          }
         },
         ...CACHE_CONFIG,
       },

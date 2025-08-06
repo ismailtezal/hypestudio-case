@@ -57,7 +57,8 @@ const fetchTradeAreasWithProgress = async (
   onProgress(5, 'Connecting to trade areas API...');
   
   try {
-    const response = await fetch('/api/trade-areas');
+    // Use streaming endpoint for better performance
+    const response = await fetch('/api/trade-areas/stream?batch_size=500');
     
     if (!response.ok) {
       throw new Error('Failed to fetch trade areas');
