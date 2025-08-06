@@ -18,6 +18,8 @@ const MapView: React.FC = React.memo(() => {
     x: number;
     y: number;
   } | null>(null);
+  
+  const lastCenteredPlaceId = React.useRef<string | null>(null);
 
   const { isLoading, error, progress } = useProgressData();
   const { data: myPlace } = useMyPlace();
@@ -50,24 +52,39 @@ const MapView: React.FC = React.memo(() => {
 
     const id = setTimeout(() => ui.updateLegend(), 80);
 
-    if (
-      myPlace?.longitude &&
-      myPlace?.latitude &&
-      typeof myPlace.longitude === 'number' &&
-      typeof myPlace.latitude === 'number' &&
-      !isNaN(myPlace.longitude) &&
-      !isNaN(myPlace.latitude) &&
-      myPlace.longitude >= -180 && myPlace.longitude <= 180 &&
-      myPlace.latitude >= -90 && myPlace.latitude <= 90 &&
-      viewState.longitude === -122.4194 &&
-      viewState.latitude === 37.7749
-    ) {
-      console.log('🗺️ Setting viewState to myPlace coordinates:', myPlace.longitude, myPlace.latitude);
-      ui.setViewState({
-        longitude: myPlace.longitude,
-        latitude: myPlace.latitude,
-        zoom: 13,
-      });
+    // Center map on myPlace when data is loaded
+    if (myPlace?.longitude && myPlace?.latitude) {
+      // Convert string coordinates to numbers if needed
+      const myLng = typeof myPlace.longitude === 'string' ? parseFloat(myPlace.longitude) : myPlace.longitude;
+      const myLat = typeof myPlace.latitude === 'string' ? parseFloat(myPlace.latitude) : myPlace.latitude;
+      
+      // Validate coordinates
+      if (
+        typeof myLng === 'number' &&
+        typeof myLat === 'number' &&
+        !isNaN(myLng) &&
+        !isNaN(myLat) &&
+        myLng >= -180 && myLng <= 180 &&
+        myLat >= -90 && myLat <= 90
+      ) {
+        // Check if this is a new place we haven't centered on yet
+        const isNewPlace = lastCenteredPlaceId.current !== myPlace.id;
+        
+        // Check if map is still at default location
+        const isAtDefaultLocation = 
+          Math.abs(viewState.longitude - (-122.4194)) < 0.001 && 
+          Math.abs(viewState.latitude - 37.7749) < 0.001;
+        
+        if (isNewPlace || isAtDefaultLocation) {
+          console.log('🗺️ Centering map on myPlace:', myPlace.name, [myLng, myLat]);
+          lastCenteredPlaceId.current = myPlace.id;
+          ui.setViewState({
+            longitude: myLng,
+            latitude: myLat,
+            zoom: 13,
+          });
+        }
+      }
     }
     return () => clearTimeout(id);
   }, [
