@@ -42,70 +42,17 @@ export async function GET(request: NextRequest) {
 
     query += ' ORDER BY pid ASC, trade_area ASC';
 
-    console.log('🔍 Loading trade areas data in database chunks...');
+    console.log('🔍 Loading trade areas data...');
     
-    // Fetch data in database-level chunks to avoid 502 errors
-    const dbChunkSize = 500; // Fetch 500 records per database query
-    const tradeAreas: any[] = [];
-    let offset = 0;
-    let hasMoreData = true;
-    let totalFetched = 0;
+    const result = await db.execute(query, params);
     
-    while (hasMoreData) {
-      try {
-        // Create paginated query for database-level chunking
-        const paginatedQuery = query + ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-        console.log(`⏳ Fetching trade areas chunk ${Math.floor(offset / dbChunkSize) + 1} (${offset + 1}-${offset + dbChunkSize})...`);
-        
-        const result = await db.execute(paginatedQuery, [...params, dbChunkSize, offset]);
-        
-        if (result.rows.length === 0) {
-          hasMoreData = false;
-          break;
-        }
-        
-        console.log(`📊 Processing ${result.rows.length} trade areas from database chunk...`);
-        
-        // Process the fetched chunk in smaller memory chunks
-        const memoryChunkSize = 100;
-        for (let i = 0; i < result.rows.length; i += memoryChunkSize) {
-          const chunk = result.rows.slice(i, i + memoryChunkSize);
-          
-          for (const row of chunk) {
-            try {
-              const polygon = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
-              tradeAreas.push({
-                pid: row.pid,
-                polygon: polygon,
-                trade_area: row.trade_area
-              });
-            } catch (error) {
-              console.warn(`⚠️ Skipping invalid polygon for pid ${row.pid}:`, error.message);
-              continue;
-            }
-          }
-        }
-        
-        totalFetched += result.rows.length;
-        offset += dbChunkSize;
-        
-        // If we got fewer rows than requested, we've reached the end
-        if (result.rows.length < dbChunkSize) {
-          hasMoreData = false;
-        }
-        
-        console.log(`✅ Processed ${totalFetched} trade areas so far...`);
-        
-      } catch (chunkError) {
-        console.error(`❌ Error fetching chunk at offset ${offset}:`, chunkError);
-        // Try to continue with next chunk or break if too many errors
-        offset += dbChunkSize;
-        if (offset > 10000) { // Safety limit
-          console.error('Too many errors, stopping fetch');
-          break;
-        }
-      }
-    }
+    console.log(`📊 Processing ${result.rows.length} trade areas...`);
+    
+    const tradeAreas = result.rows.map(row => ({
+      pid: row.pid,
+      polygon: row.polygon, // PostgreSQL JSONB automatically parses JSON
+      trade_area: row.trade_area
+    }));
 
     console.log(`✅ Trade areas loaded successfully! (${tradeAreas.length} features)`);
 

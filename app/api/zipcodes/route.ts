@@ -11,7 +11,7 @@ export async function GET() {
 
     const zipcodes = result.rows.map(row => ({
       id: row.id,
-      polygon: typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon
+      polygon: row.polygon // PostgreSQL JSONB automatically parses JSON
     }));
 
     return NextResponse.json(zipcodes);
