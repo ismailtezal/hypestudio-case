@@ -1,16 +1,69 @@
-import { createClient } from '@libsql/client';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
 
-const url = process.env.DATABASE_URL || 'file:local.db';
-const authToken = process.env.DATABASE_AUTH_TOKEN;
+// Load environment variables
+dotenv.config({ path: '.env.local' });
 
-// Create database client with optimized configuration for large queries
-export const db = createClient({
-  url,
-  ...(authToken && { authToken }),
-  // Optimize for large result sets with proper libSQL config
-  syncUrl: undefined, // Disable sync for performance
-  intMode: 'number', // Use numbers instead of BigInt for better performance
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
+
+// PostgreSQL client for direct database operations
+export const pgPool = new Pool({
+  connectionString: databaseUrl,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
+
+// Database interface that matches your existing API
+export const db = {
+  async execute(sql: string, params?: any[]) {
+    const client = await pgPool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return {
+        rows: result.rows,
+        rowCount: result.rowCount,
+      };
+    } finally {
+      client.release();
+    }
+  },
+
+  async transaction() {
+    const client = await pgPool.connect();
+    await client.query('BEGIN');
+    
+    return {
+      async execute(sql: string, params?: any[]) {
+        const result = await client.query(sql, params);
+        return {
+          rows: result.rows,
+          rowCount: result.rowCount,
+        };
+      },
+      
+      async commit() {
+        try {
+          await client.query('COMMIT');
+        } finally {
+          client.release();
+        }
+      },
+      
+      async rollback() {
+        try {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
+      }
+    };
+  }
+};
 
 // Simple in-memory cache for API responses
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();

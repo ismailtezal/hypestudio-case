@@ -89,10 +89,11 @@ const seedDatabase = async () => {
 
     // Insert my place
     console.log('Inserting my place...');
-    await db.execute({
-      sql: `INSERT INTO places (id, name, street_address, city, state, logo, longitude, latitude, industry, is_trade_area_available, is_home_zipcodes_available, category) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
+    await db.execute(
+      `INSERT INTO places (id, name, street_address, city, state, logo, longitude, latitude, industry, is_trade_area_available, is_home_zipcodes_available, category) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (id) DO NOTHING`,
+      [
         myPlaceData.id,
         myPlaceData.name,
         myPlaceData.street_address,
@@ -102,97 +103,63 @@ const seedDatabase = async () => {
         myPlaceData.longitude,
         myPlaceData.latitude,
         myPlaceData.industry,
-        myPlaceData.isTradeAreaAvailable ? 1 : 0,
-        myPlaceData.isHomeZipcodesAvailable ? 1 : 0,
+        myPlaceData.isTradeAreaAvailable,
+        myPlaceData.isHomeZipcodesAvailable,
         'user_place'
       ]
-    });
+    );
 
-    // Insert competitors in batches
+    // Insert competitors
     console.log(`Inserting ${competitorsData.length} competitors...`);
-    const batchSize = 100;
-    for (let i = 0; i < competitorsData.length; i += batchSize) {
-      const batch = competitorsData.slice(i, i + batchSize);
-      const transaction = await db.transaction();
-      
-      try {
-        for (const competitor of batch) {
-          await transaction.execute({
-            sql: `INSERT OR IGNORE INTO places (id, name, street_address, city, state, logo, longitude, latitude, industry, is_trade_area_available, is_home_zipcodes_available, category) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            args: [
-              competitor.pid,
-              competitor.name,
-              competitor.street_address,
-              competitor.city,
-              competitor.region,
-              competitor.logo,
-              competitor.longitude,
-              competitor.latitude,
-              competitor.sub_category,
-              competitor.trade_area_activity ? 1 : 0,
-              competitor.home_locations_activity ? 1 : 0,
-              'competitor'
-            ]
-          });
-        }
-        await transaction.commit();
-        console.log(`Inserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(competitorsData.length / batchSize)}`);
-      } catch (error) {
-        await transaction.rollback();
-        throw error;
-      }
+    for (const competitor of competitorsData) {
+      await db.execute(
+        `INSERT INTO places (id, name, street_address, city, state, logo, longitude, latitude, industry, is_trade_area_available, is_home_zipcodes_available, category) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          competitor.pid,
+          competitor.name,
+          competitor.street_address,
+          competitor.city,
+          competitor.region,
+          competitor.logo,
+          competitor.longitude,
+          competitor.latitude,
+          competitor.sub_category,
+          competitor.trade_area_activity,
+          competitor.home_locations_activity,
+          'competitor'
+        ]
+      );
     }
 
-    // Insert zipcodes in batches
+    // Insert zipcodes
     console.log(`Inserting ${zipcodesData.length} zipcodes...`);
-    for (let i = 0; i < zipcodesData.length; i += batchSize) {
-      const batch = zipcodesData.slice(i, i + batchSize);
-      const transaction = await db.transaction();
-      
-      try {
-        for (const zipcode of batch) {
-          const polygonStr = typeof zipcode.polygon === 'string' 
-            ? zipcode.polygon 
-            : JSON.stringify(zipcode.polygon);
-            
-          await transaction.execute({
-            sql: `INSERT OR IGNORE INTO zipcodes (id, polygon) VALUES (?, ?)`,
-            args: [zipcode.id, polygonStr]
-          });
-        }
-        await transaction.commit();
-        console.log(`Inserted zipcode batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(zipcodesData.length / batchSize)}`);
-      } catch (error) {
-        await transaction.rollback();
-        throw error;
-      }
+    for (const zipcode of zipcodesData) {
+      const polygonStr = typeof zipcode.polygon === 'string' 
+        ? zipcode.polygon 
+        : JSON.stringify(zipcode.polygon);
+        
+      await db.execute(
+        `INSERT INTO zipcodes (id, polygon) VALUES ($1, $2)
+         ON CONFLICT (id) DO NOTHING`,
+        [zipcode.id, polygonStr]
+      );
     }
 
     // Insert trade areas if available
     if (tradeAreasData.length > 0) {
       console.log(`Inserting ${tradeAreasData.length} trade areas...`);
-      for (let i = 0; i < tradeAreasData.length; i += batchSize) {
-        const batch = tradeAreasData.slice(i, i + batchSize);
-        const transaction = await db.transaction();
-        
-        try {
-          for (const tradeArea of batch) {
-            const polygonStr = typeof tradeArea.polygon === 'string' 
-              ? tradeArea.polygon 
-              : JSON.stringify(tradeArea.polygon);
-              
-            await transaction.execute({
-              sql: `INSERT OR IGNORE INTO trade_areas (pid, polygon, trade_area) VALUES (?, ?, ?)`,
-              args: [tradeArea.pid, polygonStr, tradeArea.trade_area]
-            });
-          }
-          await transaction.commit();
-          console.log(`Inserted trade area batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tradeAreasData.length / batchSize)}`);
-        } catch (error) {
-          await transaction.rollback();
-          throw error;
-        }
+      for (const tradeArea of tradeAreasData) {
+        const polygonStr = typeof tradeArea.polygon === 'string' 
+          ? tradeArea.polygon 
+          : JSON.stringify(tradeArea.polygon);
+          
+        await db.execute(
+          `INSERT INTO trade_areas (pid, polygon, trade_area) VALUES ($1, $2, $3)
+           ON CONFLICT DO NOTHING`,
+          [tradeArea.pid, polygonStr, tradeArea.trade_area]
+        );
       }
     }
 
@@ -202,26 +169,19 @@ const seedDatabase = async () => {
       let totalInserted = 0;
       
       for (const entry of homeZipcodesData) {
-        const transaction = await db.transaction();
+        for (const location of entry.locations) {
+          for (const [zipcodeId, percentage] of Object.entries(location)) {
+            await db.execute(
+              `INSERT INTO home_zipcodes (pid, zipcode_id, percentage) VALUES ($1, $2, $3)
+               ON CONFLICT DO NOTHING`,
+              [entry.pid, zipcodeId, parseFloat(percentage)]
+            );
+            totalInserted++;
+          }
+        }
         
-        try {
-          for (const location of entry.locations) {
-            for (const [zipcodeId, percentage] of Object.entries(location)) {
-              await transaction.execute({
-                sql: `INSERT OR IGNORE INTO home_zipcodes (pid, zipcode_id, percentage) VALUES (?, ?, ?)`,
-                args: [entry.pid, zipcodeId, parseFloat(percentage)]
-              });
-              totalInserted++;
-            }
-          }
-          await transaction.commit();
-          
-          if (totalInserted % 1000 === 0) {
-            console.log(`Inserted ${totalInserted} home zipcode records...`);
-          }
-        } catch (error) {
-          await transaction.rollback();
-          throw error;
+        if (totalInserted % 1000 === 0) {
+          console.log(`Inserted ${totalInserted} home zipcode records...`);
         }
       }
       console.log(`Total home zipcode records inserted: ${totalInserted}`);

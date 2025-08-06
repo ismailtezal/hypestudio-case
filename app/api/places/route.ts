@@ -44,21 +44,22 @@ export async function GET(request: NextRequest) {
     `;
     
     const params: any[] = [];
+    let paramCounter = 1;
     
     // Add industry filter
     if (industry && industry !== 'all') {
-      query += ` AND industry = ?`;
+      query += ` AND industry = $${paramCounter++}`;
       params.push(industry);
     }
     
     // Add geographic bounds filter
     if (bounds) {
       const [minLng, minLat, maxLng, maxLat] = bounds.split(',').map(Number);
-      query += ` AND longitude BETWEEN ? AND ? AND latitude BETWEEN ? AND ?`;
+      query += ` AND longitude BETWEEN $${paramCounter++} AND $${paramCounter++} AND latitude BETWEEN $${paramCounter++} AND $${paramCounter++}`;
       params.push(minLng, maxLng, minLat, maxLat);
     }
     
-    query += ` ORDER BY category DESC, name ASC LIMIT ? OFFSET ?`;
+    query += ` ORDER BY category DESC, name ASC LIMIT $${paramCounter++} OFFSET $${paramCounter++}`;
     params.push(limit, offset);
 
     const result = await db.execute(query, params);

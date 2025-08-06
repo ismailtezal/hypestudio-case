@@ -24,14 +24,15 @@ export async function GET(request: NextRequest) {
     let query = 'SELECT pid, polygon, trade_area FROM trade_areas';
     const params: any[] = [];
     const conditions: string[] = [];
+    let paramCounter = 1;
 
     if (pid) {
-      conditions.push('pid = ?');
+      conditions.push(`pid = $${paramCounter++}`);
       params.push(parseInt(pid));
     }
 
     if (tradeArea) {
-      conditions.push('trade_area = ?');
+      conditions.push(`trade_area = $${paramCounter++}`);
       params.push(parseInt(tradeArea));
     }
 
@@ -53,10 +54,10 @@ export async function GET(request: NextRequest) {
     while (hasMoreData) {
       try {
         // Create paginated query for database-level chunking
-        const paginatedQuery = query + ` LIMIT ${dbChunkSize} OFFSET ${offset}`;
+        const paginatedQuery = query + ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
         console.log(`⏳ Fetching trade areas chunk ${Math.floor(offset / dbChunkSize) + 1} (${offset + 1}-${offset + dbChunkSize})...`);
         
-        const result = await db.execute(paginatedQuery, params);
+        const result = await db.execute(paginatedQuery, [...params, dbChunkSize, offset]);
         
         if (result.rows.length === 0) {
           hasMoreData = false;

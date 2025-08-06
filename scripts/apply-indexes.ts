@@ -1,7 +1,7 @@
 import { db } from '../lib/db';
 
 async function applyIndexes() {
-  console.log('🚀 Applying database indexes for Turso cloud database...');
+  console.log('🚀 Applying database indexes for PostgreSQL database...');
 
   const indexes = [
     // Places table indexes for better performance
@@ -14,17 +14,18 @@ async function applyIndexes() {
     'CREATE INDEX IF NOT EXISTS idx_trade_areas_pid ON trade_areas(pid)',
     'CREATE INDEX IF NOT EXISTS idx_trade_areas_composite ON trade_areas(pid, trade_area)',
     
-    // Zipcodes indexes (corrected column names for Turso)
+    // Zipcodes indexes
     'CREATE INDEX IF NOT EXISTS idx_zipcodes_id ON zipcodes(id)',
     'CREATE INDEX IF NOT EXISTS idx_home_zipcodes_pid ON home_zipcodes(pid)',
     'CREATE INDEX IF NOT EXISTS idx_home_zipcodes_zipcode ON home_zipcodes(zipcode_id)',
     
-    // Spatial index for geographic queries (Turso compatible)
-    'CREATE INDEX IF NOT EXISTS idx_places_valid_coords ON places(longitude, latitude) WHERE longitude IS NOT NULL AND latitude IS NOT NULL',
+    // JSONB indexes for PostgreSQL
+    'CREATE INDEX IF NOT EXISTS idx_zipcodes_polygon_gin ON zipcodes USING GIN(polygon)',
+    'CREATE INDEX IF NOT EXISTS idx_trade_areas_polygon_gin ON trade_areas USING GIN(polygon)',
   ];
 
   try {
-    console.log('📊 Connecting to Turso database...');
+    console.log('📊 Connecting to PostgreSQL database...');
     
     for (const [index, sql] of indexes.entries()) {
       console.log(`📊 Applying index ${index + 1}/${indexes.length}: ${sql.split(' ')[2]}`);
