@@ -1,16 +1,15 @@
 import React from 'react';
 import { ScatterplotLayer, PolygonLayer, IconLayer } from 'deck.gl';
 import { useUIStore } from '../stores';
-import { useHomeZipcodes } from './useData';
-import { useProgressData } from './useProgressData';
+import { useHomeZipcodes } from './use-data';
+import { useProgressData } from './use-progress-data';
 import { COLORS, isValidCoordinate } from '../lib/utils';
 import { Place } from '../types';
 
 export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number) => void) => {
   const { places, tradeAreas, zipcodes } = useProgressData();
   const { data: homeZipcodes = [] } = useHomeZipcodes();
-  
-  // Get myPlace from places array - myPlace comes first in the array from fetchAllPlaces
+
   const myPlace = places.length > 0 ? places[0] : null;
   const { 
     placeAnalysis,
@@ -469,8 +468,6 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 function getTradeAreaColor(percentage: number): [number, number, number, number] {
-  // Case study: En geniş polygon %70'i, en küçük polygon %30'u temsil eder
-  // Higher percentage = smaller area = higher opacity
   switch (percentage) {
     case 70: return [255, 107, 107, 120]; // Smallest area, reduced opacity red
     case 50: return [78, 205, 196, 100]; // Medium area, reduced opacity teal  
@@ -489,9 +486,6 @@ function getTradeAreaBorderColor(percentage: number): [number, number, number, n
 }
 
 function getHomeZipcodeColor(percentile: number): [number, number, number, number] {
-  // Case study: Percentile değerleri 5 gruba ayrılmalı
-  // 0-20: 0-4.5%, 20-40: 4.5%-25%, 40-60: 25%-29%, 60-80: 29%-32.6%, 80-100: 32.6%-45%
-  
   if (percentile >= 80) return [139, 0, 0, 200];     // Dark red (80-100)
   if (percentile >= 60) return [205, 92, 92, 180];   // Indian red (60-80)
   if (percentile >= 40) return [255, 165, 0, 160];   // Orange (40-60)

@@ -15,12 +15,11 @@ import {
 } from '../types';
 
 interface DataStore {
-  // Data state - based on case study specifications
   places: Place[];
   tradeAreas: TradeArea[];
   homeZipcodes: HomeZipcodes[];
   zipcodes: Zipcode[];
-  myPlace: Place | null; // The main place we're analyzing
+  myPlace: Place | null;
   
   // Loading states
   isLoading: boolean;
@@ -38,10 +37,8 @@ interface DataStore {
 }
 
 interface UIStore {
-  // Map state
   viewState: ViewState;
   
-  // Sidebar states - based on Turkish case study
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
   
@@ -77,7 +74,6 @@ interface UIStore {
   initialize: () => void;
 }
 
-// Default values based on case study requirements
 const defaultViewState: ViewState = {
   longitude: -122.4194,
   latitude: 37.7749,
@@ -94,7 +90,7 @@ const defaultPlaceAnalysis: PlaceAnalysisSettings = {
 
 const defaultCustomerAnalysis: CustomerAnalysisSettings = {
   dataType: 'Trade Area',
-  selectedTradeAreas: [30, 50, 70], // Default all selected
+  selectedTradeAreas: [30, 50, 70],
   isVisible: true,
 };
 
@@ -121,9 +117,6 @@ export const useDataStore = create<DataStore>()(
       
       loadAllData: async () => {
         set({ isLoading: true, error: null });
-        // Note: This function is kept for backward compatibility
-        // The actual data fetching should now be handled by TanStack Query hooks
-        // in the components. This can be removed once all components are updated.
         console.log('loadAllData is deprecated. Use TanStack Query hooks instead.');
         set({ isLoading: false });
       },
@@ -165,18 +158,14 @@ export const useUIStore = create<UIStore>()(
         set((state) => {
           const newSettings = { ...state.customerAnalysis, ...settings };
           
-          // Case study requirement: When switching to Home Zipcodes,
-          // only My Place home zipcodes should remain visible
           if (settings.dataType === 'Home Zipcodes') {
             return {
               customerAnalysis: newSettings,
-              visibleTradeAreas: {}, // Clear all trade areas
-              visibleHomeZipcodes: { placeId: null }, // Will be set by component when My Place is available
+              visibleTradeAreas: {},
+              visibleHomeZipcodes: { placeId: null },
             };
           }
           
-          // Case study requirement: When switching back to Trade Area,
-          // clear home zipcodes
           if (settings.dataType === 'Trade Area') {
             return {
               customerAnalysis: newSettings,

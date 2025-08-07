@@ -4,10 +4,10 @@ import React from 'react';
 import { Box, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import { Menu as MenuIcon, ViewList as LegendIcon } from '@mui/icons-material';
 import { useUIStore } from '../stores';
-import MapView from '../components/MapView';
-import { MapErrorBoundary } from '../components/MapErrorBoundary';
-import LeftSidebar from '../components/LeftSidebar';
-import RightSidebar from '../components/RightSidebar';
+import MapView from '../components/map-view';
+import { MapErrorBoundary } from '../components/map-error-boundary';
+import LeftSidebar from '../components/left-sidebar';
+import RightSidebar from '../components/right-sidebar';
 
 export default function Home() {
   const { leftSidebarOpen, rightSidebarOpen, setLeftSidebarOpen, setRightSidebarOpen } = useUIStore();

@@ -23,7 +23,7 @@ import {
   People as PeopleIcon,
 } from '@mui/icons-material';
 import { useUIStore } from '../stores';
-import { usePlaces } from '../hooks/useData';
+import { usePlaces } from '../hooks/use-data';
 
 const SIDEBAR_WIDTH = 360;
 

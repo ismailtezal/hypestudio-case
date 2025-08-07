@@ -4,13 +4,13 @@ import React from 'react';
 import { Map } from 'react-map-gl';
 import DeckGL from '@deck.gl/react';
 import { useUIStore } from '../stores';
-import { useAllData, useMyPlace } from '../hooks/useData';
-import { useProgressData } from '../hooks/useProgressData';
-import { useDeckLayers } from '../hooks/useDeckLayers';
+import { useAllData, useMyPlace } from '../hooks/use-data';
+import { useProgressData } from '../hooks/use-progress-data';
+import { useDeckLayers } from '../hooks/use-deck-layers';
 import { MAP_STYLES, MAPBOX_TOKEN } from '../lib/utils';
 import { Box, CircularProgress, Alert, Chip, LinearProgress, Typography } from '@mui/material';
 import { Place } from '../types';
-import { PlaceTooltip } from './PlaceTooltip';
+import { PlaceTooltip } from './place-tooltip';
 
 const MapView: React.FC = React.memo(() => {
   const [tooltipInfo, setTooltipInfo] = React.useState<{

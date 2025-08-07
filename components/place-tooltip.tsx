@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { Place } from '../types';
 import { useUIStore } from '../stores';
-import { useTradeAreas, useHomeZipcodes } from '../hooks/useData';
+import { useTradeAreas, useHomeZipcodes } from '../hooks/use-data';
 
 interface PlaceTooltipProps {
   place: Place;
