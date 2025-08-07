@@ -32,19 +32,29 @@ export const PlaceTooltip: React.FC<PlaceTooltipProps> = React.memo(
     const { data: tradeAreas = [] } = useTradeAreas();
     const { data: homeZipcodes = [] } = useHomeZipcodes();
 
+    const currentTradeAreas = visibleTradeAreas[place.id] || [];
+    const isTradeAreaVisible = currentTradeAreas.length > 0;
+    const isHomeZipcodesVisible = visibleHomeZipcodes.placeId === place.id;
+
     const hasTradeAreaData = React.useMemo(
-      () => !!place.isTradeAreaAvailable && tradeAreas.some((ta) => ta.pid === place.id),
-      [place.isTradeAreaAvailable, place.id, tradeAreas]
+      () => {
+        // If trade areas are already visible, the button should be enabled
+        if (isTradeAreaVisible) return true;
+        
+        // For My Place, if isTradeAreaAvailable is true, always enable the button
+        // This ensures we can always show/hide trade areas for My Place
+        if (place.isTradeAreaAvailable) return true;
+        
+        // For other places, check if data actually exists
+        return tradeAreas.some((ta) => ta.pid === place.id);
+      },
+      [place.isTradeAreaAvailable, place.id, tradeAreas, isTradeAreaVisible]
     );
 
     const hasHomeZipcodesData = React.useMemo(
       () => !!place.isHomeZipcodesAvailable && homeZipcodes.some((hz) => hz.place_id === place.id),
       [place.isHomeZipcodesAvailable, place.id, homeZipcodes]
     );
-
-    const currentTradeAreas = visibleTradeAreas[place.id] || [];
-    const isTradeAreaVisible = currentTradeAreas.length > 0;
-    const isHomeZipcodesVisible = visibleHomeZipcodes.placeId === place.id;
 
     const handleTradeAreaToggle = React.useCallback(() => {
       if (isTradeAreaVisible) {
