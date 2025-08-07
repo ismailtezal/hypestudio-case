@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, getFromCache, setCache } from '../../../lib/db';
+import { db } from '../../../lib/db';
+import { jsonWithETag } from '../../../lib/http';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,21 +11,7 @@ export async function GET(request: NextRequest) {
     const offset = url.searchParams.get('offset');
     const stream = url.searchParams.get('stream') === 'true';
     
-    // Create cache key
-    const cacheKey = `trade_areas_${pid || 'all'}_${tradeArea || 'all'}_${limit || 'all'}_${offset || '0'}`;
-    
-    // Check cache first for non-streaming requests
-    if (!stream) {
-      const cached = getFromCache(cacheKey);
-      if (cached) {
-        return NextResponse.json(cached, {
-          headers: {
-            'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
-            'Content-Type': 'application/json',
-          }
-        });
-      }
-    }
+    // Consider adding ETag generation here for HTTP caching
 
     let query = 'SELECT pid, polygon, trade_area FROM trade_areas';
     const params: any[] = [];
@@ -68,11 +55,14 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Processing ${result.rows.length} trade areas...`);
     
-    const tradeAreas = result.rows.map(row => ({
-      pid: row.pid,
-      polygon: row.polygon, // PostgreSQL JSONB automatically parses JSON
-      trade_area: row.trade_area
-    }));
+    const tradeAreas = result.rows.map(row => {
+      const polygon = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
+      return {
+        pid: row.pid,
+        polygon,
+        trade_area: row.trade_area,
+      };
+    });
 
     console.log(`✅ Trade areas loaded successfully! (${tradeAreas.length} features)`);
 
@@ -85,18 +75,11 @@ export async function GET(request: NextRequest) {
         total: tradeAreas.length
       }
     };
-    
-    // Cache for 10 minutes (trade areas change infrequently)
-    if (!stream) {
-      setCache(cacheKey, response, 600);
-    }
 
-    return NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
-        'Content-Type': 'application/json',
-        'X-Total-Features': tradeAreas.length.toString(),
-      }
+    return jsonWithETag(request, response, {
+      'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
+      'Content-Type': 'application/json',
+      'X-Total-Features': tradeAreas.length.toString(),
     });
   } catch (error) {
     console.error('Error fetching trade areas:', error);

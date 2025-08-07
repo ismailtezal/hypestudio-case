@@ -40,7 +40,7 @@ export class MapErrorBoundary extends React.Component<Props, ErrorBoundaryState>
   }
 
   retry = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+    this.setState({ hasError: false, error: undefined as unknown as Error, errorInfo: undefined as unknown as React.ErrorInfo });
   };
 
   render() {

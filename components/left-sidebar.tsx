@@ -47,14 +47,12 @@ const SectionHeader: React.FC<{
 );
 
 const LeftSidebar: React.FC = React.memo(() => {
-  const {
-    leftSidebarOpen,
-    setLeftSidebarOpen,
-    placeAnalysis,
-    setPlaceAnalysis,
-    customerAnalysis,
-    setCustomerAnalysis,
-  } = useUIStore();
+  const leftSidebarOpen = useUIStore(s => s.leftSidebarOpen);
+  const setLeftSidebarOpen = useUIStore(s => s.setLeftSidebarOpen);
+  const placeAnalysis = useUIStore(s => s.placeAnalysis);
+  const setPlaceAnalysis = useUIStore(s => s.setPlaceAnalysis);
+  const customerAnalysis = useUIStore(s => s.customerAnalysis);
+  const setCustomerAnalysis = useUIStore(s => s.setCustomerAnalysis);
 
   const { data: places = [] } = usePlaces();
 
@@ -219,19 +217,22 @@ const LeftSidebar: React.FC = React.memo(() => {
                   onChange={(_, v) => setPlaceAnalysis({ selectedIndustries: v })}
                   size="small"
                   renderInput={(params) => (
-                    <TextField {...params} placeholder="Sektör seçin..." size="small" />
+                    <TextField {...(params as any)} placeholder="Sektör seçin..." size="small" />
                   )}
                   renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        key={option}
-                        label={option}
-                        size="small"
-                        color="default"
-                        variant="outlined"
-                        {...getTagProps({ index })}
-                      />
-                    ))
+                    value.map((option, index) => {
+                      const tagProps = getTagProps({ index });
+                      // Spread tagProps last to let it provide the key
+                      return (
+                        <Chip
+                          label={option}
+                          size="small"
+                          color="default"
+                          variant="outlined"
+                          {...tagProps}
+                        />
+                      );
+                    })
                   }
                 />
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>

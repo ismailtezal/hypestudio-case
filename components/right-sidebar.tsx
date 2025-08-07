@@ -26,8 +26,10 @@ import { useUIStore } from '../stores';
 const SIDEBAR_WIDTH = 340;
 
 const RightSidebar: React.FC = React.memo(() => {
-  const { rightSidebarOpen, setRightSidebarOpen, legendData, customerAnalysis } =
-    useUIStore();
+  const rightSidebarOpen = useUIStore(s => s.rightSidebarOpen);
+  const setRightSidebarOpen = useUIStore(s => s.setRightSidebarOpen);
+  const legendData = useUIStore(s => s.legendData);
+  const customerAnalysis = useUIStore(s => s.customerAnalysis);
 
   React.useEffect(() => {
     const id = setTimeout(() => useUIStore.getState().updateLegend(), 80);

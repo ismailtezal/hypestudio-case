@@ -12,12 +12,11 @@ export async function GET(request: NextRequest) {
   
   const encoder = new TextEncoder();
   
-  // Create streaming response using ReadableStream
+  // Create streaming response using ReadableStream (NDJSON)
   const readableStream = new ReadableStream({
     async start(controller) {
       try {
-        // Start JSON array response
-        controller.enqueue(encoder.encode('['));
+        // NDJSON: each line is a JSON object
         
         // Build optimized query with cursor-based pagination
         let query = 'SELECT pid, polygon, trade_area FROM trade_areas';
@@ -27,9 +26,12 @@ export async function GET(request: NextRequest) {
 
         // Add cursor condition for pagination (much faster than OFFSET)
         if (cursor) {
-          const [cursorPid, cursorTradeArea] = cursor.split(',');
-          conditions.push(`(pid > $${paramCounter++} OR (pid = $${paramCounter++} AND trade_area > $${paramCounter++}))`);
-          params.push(parseInt(cursorPid), parseInt(cursorPid), parseInt(cursorTradeArea));
+          const parts = cursor.split(',');
+          if (parts.length === 2) {
+            const [cursorPid, cursorTradeArea] = parts as [string, string];
+            conditions.push(`(pid > $${paramCounter++} OR (pid = $${paramCounter++} AND trade_area > $${paramCounter++}))`);
+            params.push(parseInt(cursorPid, 10), parseInt(cursorPid, 10), parseInt(cursorTradeArea, 10));
+          }
         }
 
         if (pid) {
@@ -51,7 +53,6 @@ export async function GET(request: NextRequest) {
         
         let lastPid: number | null = null;
         let lastTradeArea: number | null = null;
-        let isFirst = true;
         let totalFeatures = 0;
         
         console.log(`⚡ Processing with cursor-based pagination, batch size: ${batchSize}...`);
@@ -120,11 +121,12 @@ export async function GET(request: NextRequest) {
                 continue;
               }
               
-              // Validate polygon structure
+              // Normalize polygon to object and validate structure
+              let polygonObj: any;
               try {
-                const polygonTest = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
-                if (!polygonTest || !polygonTest.type) {
-                  console.error('❌ Invalid polygon structure:', polygonTest);
+                polygonObj = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
+                if (!polygonObj || !polygonObj.type) {
+                  console.error('❌ Invalid polygon structure:', polygonObj);
                   continue;
                 }
               } catch (e) {
@@ -136,19 +138,16 @@ export async function GET(request: NextRequest) {
               const feature = {
                 pid: row.pid,
                 trade_area: row.trade_area,
-                polygon: row.polygon // Keep polygon as direct property for deck.gl compatibility
+                polygon: polygonObj
               };
-              
-              const prefix = isFirst ? '' : ',';
-              isFirst = false;
               totalFeatures++;
               
               // Update cursor for next iteration
               lastPid = row.pid;
               lastTradeArea = row.trade_area;
               
-              // Stream each feature immediately
-              controller.enqueue(encoder.encode(prefix + JSON.stringify(feature)));
+              // Stream each feature immediately as NDJSON
+              controller.enqueue(encoder.encode(JSON.stringify(feature) + '\n'));
               
               // Optional: Add artificial delay to prevent overwhelming the client
               // await new Promise(resolve => setTimeout(resolve, 1));
@@ -166,8 +165,7 @@ export async function GET(request: NextRequest) {
           }
         }
         
-        // Close JSON array response
-        controller.enqueue(encoder.encode(`]`));
+        // Nothing to close for NDJSON
         controller.close();
         
         console.log(`✅ Streaming completed! Total features: ${totalFeatures}`);
@@ -182,12 +180,6 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString()
         };
         
-        try {
-          controller.enqueue(encoder.encode(']'));
-        } catch (e) {
-          console.error('Failed to send error response:', e);
-        }
-        
         controller.error(error);
       }
     },
@@ -199,7 +191,7 @@ export async function GET(request: NextRequest) {
 
   return new Response(readableStream, {
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-ndjson',
       'Cache-Control': 'no-cache',
       'X-Accel-Buffering': 'no', // Disable Nginx buffering
       'Access-Control-Allow-Origin': '*',

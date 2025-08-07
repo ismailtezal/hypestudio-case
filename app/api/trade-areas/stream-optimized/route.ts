@@ -37,9 +37,12 @@ export async function GET(request: NextRequest) {
 
         // Cursor-based pagination for better performance on large datasets
         if (cursor) {
-          const [cursorPid, cursorTradeArea, cursorId] = cursor.split(':');
-          conditions.push(`(pid, trade_area, id) > ($${paramCounter++}, $${paramCounter++}, $${paramCounter++})`);
-          params.push(parseInt(cursorPid), parseInt(cursorTradeArea), parseInt(cursorId));
+          const parts = cursor.split(':');
+          if (parts.length === 3) {
+            const [cursorPid, cursorTradeArea, cursorId] = parts as [string, string, string];
+            conditions.push(`(pid, trade_area, id) > ($${paramCounter++}, $${paramCounter++}, $${paramCounter++})`);
+            params.push(parseInt(cursorPid, 10), parseInt(cursorTradeArea, 10), parseInt(cursorId, 10));
+          }
         }
 
         // Use the optimized composite index: pid, trade_area, id
@@ -70,8 +73,6 @@ export async function GET(request: NextRequest) {
         
         while (true) {
           try {
-            // Use prepared statement for better performance on repeated queries
-            const prepareName = `trade_areas_stream_${conditions.length}_${Date.now()}`;
             const result = await db.execute(query, params);
             
             if (result.rows.length === 0) {
@@ -83,10 +84,20 @@ export async function GET(request: NextRequest) {
             
             for (const row of result.rows) {
               // Format data to match what deck.gl layers expect
+              let polygonObj: any;
+              try {
+                polygonObj = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
+                if (!polygonObj || !polygonObj.type) {
+                  continue;
+                }
+              } catch {
+                continue;
+              }
+
               const feature = {
                 pid: row.pid,
                 trade_area: row.trade_area,
-                polygon: row.polygon // Keep polygon as direct property for deck.gl compatibility
+                polygon: polygonObj
               };
               
               const prefix = isFirst ? '' : ',';

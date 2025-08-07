@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db';
+import { jsonWithETag } from '../../../lib/http';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const result = await db.execute(`
       SELECT 
@@ -34,7 +35,10 @@ export async function GET() {
       locations  // Array of Location objects: [{ "zipcode1": number }, { "zipcode2": number }]
     }));
 
-    return NextResponse.json(homeZipcodes);
+    return jsonWithETag(request, homeZipcodes, {
+      'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
+      'Content-Type': 'application/json',
+    });
   } catch (error) {
     console.error('Error fetching home zipcodes:', error);
     return NextResponse.json(

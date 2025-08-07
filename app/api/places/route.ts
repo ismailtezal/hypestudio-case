@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, getFromCache, setCache } from '../../../lib/db';
+import { db } from '../../../lib/db';
+import { jsonWithETag } from '../../../lib/http';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,19 +11,7 @@ export async function GET(request: NextRequest) {
     const industry = url.searchParams.get('industry');
     const bounds = url.searchParams.get('bounds'); // "minLng,minLat,maxLng,maxLat"
     
-    // Create cache key based on parameters
-    const cacheKey = `places_optimized_${limit}_${cursor || 'start'}_${industry || 'all'}_${bounds || 'nobounds'}`;
-    
-    // Check cache first
-    const cached = getFromCache(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-          'Content-Type': 'application/json',
-        }
-      });
-    }
+    // Consider adding ETag generation here in the future for HTTP caching
 
     // Use optimized materialized view for better performance
     let query = `
@@ -85,8 +74,8 @@ export async function GET(request: NextRequest) {
       city: row.city,
       state: row.state,
       logo: row.logo,
-      longitude: row.longitude,
-      latitude: row.latitude,
+      longitude: typeof row.longitude === 'string' ? parseFloat(row.longitude) : row.longitude,
+      latitude: typeof row.latitude === 'string' ? parseFloat(row.latitude) : row.latitude,
       industry: row.industry,
       isTradeAreaAvailable: Boolean(row.isTradeAreaAvailable),
       isHomeZipcodesAvailable: Boolean(row.isHomeZipcodesAvailable),
@@ -94,15 +83,10 @@ export async function GET(request: NextRequest) {
     }));
 
     const response = { places };
-    
-    // Cache the result for 5 minutes
-    setCache(cacheKey, response, 300);
 
-    return NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-        'Content-Type': 'application/json',
-      }
+    return jsonWithETag(request, response, {
+      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+      'Content-Type': 'application/json',
     });
   } catch (error) {
     console.error('Error fetching places:', error);

@@ -21,16 +21,17 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
   } = useUIStore();
 
   const layers = React.useMemo(() => {
-    console.log('=== Rendering Layers ===');
-    console.log('places:', places);
-    console.log('places length:', places?.length);
-    console.log('myPlace (first item):', myPlace);
-    console.log('competitors (rest):', places?.slice(1));
-    console.log('customerAnalysis:', customerAnalysis);
-    console.log('placeAnalysis:', placeAnalysis);
-    console.log('visibleTradeAreas:', visibleTradeAreas);
-    console.log('tradeAreas length:', tradeAreas.length);
-    console.log('tradeAreas sample:', tradeAreas.slice(0, 2));
+    if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('=== Rendering Layers ===', {
+        placesCount: places?.length,
+        myPlace,
+        customerAnalysis,
+        placeAnalysis,
+        visibleTradeAreas,
+        tradeAreasCount: tradeAreas.length,
+      });
+    }
     
     // Validate data before proceeding
     if (!Array.isArray(tradeAreas)) {
@@ -79,33 +80,47 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
         customerAnalysis.isVisible && 
         visibleHomeZipcodes.placeId) {
       
-      console.log('=== Home Zipcodes Layer Conditions Met ===');
-      console.log('Looking for place_id:', visibleHomeZipcodes.placeId);
-      console.log('Available homeZipcodes:', homeZipcodes.map(hz => hz.pid || hz.place_id));
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('=== Home Zipcodes Layer Conditions Met ===', {
+          placeId: visibleHomeZipcodes.placeId,
+          available: homeZipcodes.map(hz => hz.pid || hz.place_id)
+        });
+      }
       
       const activeHomeZipcodes = homeZipcodes.find(
         hz => hz.place_id === visibleHomeZipcodes.placeId
       );
 
-      console.log('Found activeHomeZipcodes:', activeHomeZipcodes);
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('Found activeHomeZipcodes:', activeHomeZipcodes);
+      }
 
       if (activeHomeZipcodes && zipcodes.length > 0) {
         // Convert locations array to object format - case study uses Location[] format
         let locationsObj: { [id: string]: number } = {};
         if (Array.isArray(activeHomeZipcodes.locations)) {
-          // Convert array format to object format
-          activeHomeZipcodes.locations.forEach((item: any) => {
-            const key = Object.keys(item)[0];
-            const value = item[key];
-            locationsObj[key] = typeof value === 'string' ? parseFloat(value) : value;
-          });
+          // Convert array format to object format with strict guards
+          for (const item of activeHomeZipcodes.locations as Array<Record<string, number | string>>) {
+            const keys = Object.keys(item as Record<string, number | string>);
+            if (keys.length === 0) continue;
+            const key = keys[0] as keyof typeof item;
+            const raw = (item as Record<string, number | string>)[key as string];
+            const numeric = typeof raw === 'string' ? parseFloat(raw) : raw;
+            if (typeof numeric === 'number' && Number.isFinite(numeric)) {
+              locationsObj[key as string] = numeric;
+            }
+          }
         } else {
           // Fallback for backward compatibility
           locationsObj = activeHomeZipcodes.locations as { [id: string]: number };
         }
         
-        console.log('Processed locations object:', locationsObj);
-        console.log('Available zipcode IDs:', zipcodes.slice(0, 5).map(z => z.id));
+        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+          // eslint-disable-next-line no-console
+          console.log('Processed locations object:', locationsObj);
+        }
 
         // Create polygons with percentile-based coloring
         const homeZipcodePolygons = zipcodes
@@ -115,10 +130,9 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             percentile: locationsObj[zipcode.id] || 0,
           }));
 
-        console.log(`Found ${homeZipcodePolygons.length} matching home zipcode polygons`);
-        
-        if (homeZipcodePolygons.length > 0) {
-          console.log('Sample home zipcode polygon:', homeZipcodePolygons[0]);
+        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+          // eslint-disable-next-line no-console
+          console.log(`Found ${homeZipcodePolygons.length} matching home zipcode polygons`);
         }
 
         layerList.push(
@@ -131,25 +145,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             wireframe: false,
             lineWidthMinPixels: 1,
             getPolygon: (d: any) => {
-              // Parse the polygon JSON string for zipcodes too
-              let polygon;
-              try {
-                polygon = typeof d.polygon === 'string' ? JSON.parse(d.polygon) : d.polygon;
-              } catch (e) {
-                console.error('Failed to parse zipcode polygon JSON:', e, d.polygon);
-                return [];
-              }
-              
-              if (!polygon) {
-                console.error('No polygon data found in zipcode:', d);
-                return [];
-              }
-              
-              if (polygon.type === 'Polygon') {
-                return polygon.coordinates[0];
-              } else if (polygon.type === 'MultiPolygon') {
-                return polygon.coordinates[0][0];
-              }
+              const polygon = d.polygon;
+              if (!polygon) return [];
+              if (polygon.type === 'Polygon') return polygon.coordinates[0];
+              if (polygon.type === 'MultiPolygon') return polygon.coordinates[0][0];
               return [];
             },
             getFillColor: (d: any) => getHomeZipcodeColor(d.percentile),
@@ -167,12 +166,19 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
 
     // Trade Areas Layer (shown only if selected in Customer Analysis)
     if (customerAnalysis.dataType === 'Trade Area' && customerAnalysis.isVisible) {
-      console.log('=== Trade Area Layer Conditions Met ===');
-      console.log('customerAnalysis.selectedTradeAreas:', customerAnalysis.selectedTradeAreas);
-      console.log('visibleTradeAreas entries:', Object.entries(visibleTradeAreas));
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('=== Trade Area Layer Conditions Met ===', {
+          selected: customerAnalysis.selectedTradeAreas,
+          entries: Object.entries(visibleTradeAreas)
+        });
+      }
       
       Object.entries(visibleTradeAreas).forEach(([placeId, visibleAreas]) => {
-        console.log(`Processing placeId: ${placeId}, visibleAreas:`, visibleAreas);
+        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+          // eslint-disable-next-line no-console
+          console.log(`Processing placeId: ${placeId}, visibleAreas:`, visibleAreas);
+        }
         
         if (visibleAreas.length === 0) {
           console.log(`No visible areas for place ${placeId}`);
@@ -184,7 +190,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           customerAnalysis.selectedTradeAreas.includes(area)
         );
         
-        console.log(`Active areas for place ${placeId}:`, activeAreas);
+        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+          // eslint-disable-next-line no-console
+          console.log(`Active areas for place ${placeId}:`, activeAreas);
+        }
         
         if (activeAreas.length === 0) {
           console.log(`No active areas for place ${placeId} after filtering by selected percentages`);
@@ -195,12 +204,17 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
           ta => String(ta.pid) === String(placeId) && activeAreas.includes(ta.trade_area)
         );
         
-        console.log(`Found ${placeTradeAreas.length} trade areas for place ${placeId}:`, placeTradeAreas.map(ta => ta.trade_area));
+        if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+          // eslint-disable-next-line no-console
+          console.log(`Found ${placeTradeAreas.length} trade areas for place ${placeId}`);
+        }
         
         // Debug: Check the actual structure of trade area data
         if (placeTradeAreas.length > 0) {
-          console.log('Sample trade area object:', placeTradeAreas[0]);
-          console.log('Trade area keys:', Object.keys(placeTradeAreas[0]));
+          if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+            // eslint-disable-next-line no-console
+            console.log('Sample trade area object:', placeTradeAreas[0]);
+          }
         }
 
         placeTradeAreas.forEach(tradeArea => {
@@ -239,13 +253,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             return;
           }
           
-          console.log(`Creating polygon layer for trade area ${tradeArea.trade_area}:`, {
-            id: `trade-area-${placeId}-${tradeArea.trade_area}`,
-            polygonType: polygonData?.type,
-            coordinatesLength: polygonData?.coordinates?.length,
-            fillColor: getTradeAreaColor(tradeArea.trade_area),
-            lineColor: getTradeAreaBorderColor(tradeArea.trade_area),
-          });
+          if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+            // eslint-disable-next-line no-console
+            console.log(`Creating polygon layer for trade area ${tradeArea.trade_area}`);
+          }
           
           layerList.push(
             new PolygonLayer({
@@ -257,44 +268,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
               wireframe: false,
               lineWidthMinPixels: 2,
               getPolygon: (d: any) => {
-                console.log('Getting polygon for:', d);
-                
-                // Validate that d is not null or undefined
-                if (!d) {
-                  console.error('Trade area data is null or undefined');
-                  return [];
-                }
-                
-                // Parse the polygon JSON string
-                let polygon;
-                try {
-                  polygon = typeof d.polygon === 'string' ? JSON.parse(d.polygon) : d.polygon;
-                } catch (e) {
-                  console.error('Failed to parse polygon JSON:', e, d.polygon);
-                  return [];
-                }
-                
-                if (!polygon) {
-                  console.error('No polygon data found in:', d);
-                  return [];
-                }
-                
-                // Validate polygon structure
-                if (polygon.type === 'Polygon') {
-                  if (!polygon.coordinates || !polygon.coordinates[0]) {
-                    console.error('Invalid Polygon coordinates:', polygon);
-                    return [];
-                  }
-                  return polygon.coordinates[0];
-                } else if (polygon.type === 'MultiPolygon') {
-                  if (!polygon.coordinates || !polygon.coordinates[0] || !polygon.coordinates[0][0]) {
-                    console.error('Invalid MultiPolygon coordinates:', polygon);
-                    return [];
-                  }
-                  return polygon.coordinates[0][0];
-                }
-                
-                console.error('Unknown polygon structure:', polygon);
+                const polygon = d.polygon;
+                if (!polygon) return [];
+                if (polygon.type === 'Polygon') return polygon.coordinates[0];
+                if (polygon.type === 'MultiPolygon') return polygon.coordinates[0][0];
                 return [];
               },
               getFillColor: getTradeAreaColor(tradeArea.trade_area),
@@ -319,41 +296,27 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
       return isValidCoordinate(lng, lat);
     });
     
-    console.log('🔍 Regular places after filtering:', regularPlaces.length);
+    if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('Regular places after filtering:', regularPlaces.length);
+    }
     
     // Convert myPlace coordinates to numbers for validation
     const myPlaceLng = myPlace && typeof myPlace.longitude === 'string' ? parseFloat(myPlace.longitude) : myPlace?.longitude;
     const myPlaceLat = myPlace && typeof myPlace.latitude === 'string' ? parseFloat(myPlace.latitude) : myPlace?.latitude;
     
-    console.log('🔍 Sample myPlace coordinates:', {
-      longitude: myPlace?.longitude,
-      latitude: myPlace?.latitude,
-      converted: {
-        lng: myPlaceLng,
-        lat: myPlaceLat
-      },
-      types: {
-        lng: typeof myPlace?.longitude,
-        lat: typeof myPlace?.latitude
-      },
-      validation: myPlace ? isValidCoordinate(myPlaceLng, myPlaceLat) : false
-    });
-    console.log('🔍 First 3 competitors coordinates:', regularPlaces.slice(0, 3).map(p => ({ 
-      id: p.id, 
-      name: p.name, 
-      originalCoords: [p.longitude, p.latitude],
-      convertedCoords: [
-        typeof p.longitude === 'string' ? parseFloat(p.longitude) : p.longitude,
-        typeof p.latitude === 'string' ? parseFloat(p.latitude) : p.latitude
-      ],
-      types: {
-        lng: typeof p.longitude,
-        lat: typeof p.latitude
-      }
-    })));
+    if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+      // eslint-disable-next-line no-console
+      const lngNum = typeof myPlaceLng === 'number' ? myPlaceLng : NaN;
+      const latNum = typeof myPlaceLat === 'number' ? myPlaceLat : NaN;
+      console.log('myPlace coords valid:', myPlace ? isValidCoordinate(lngNum, latNum) : false);
+    }
     
     if (regularPlaces.length > 0) {
-      console.log('✅ Creating ScatterplotLayer for', regularPlaces.length, 'places');
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('Creating ScatterplotLayer for', regularPlaces.length, 'places');
+      }
       layerList.push(
         new ScatterplotLayer({
           id: 'places',
@@ -370,7 +333,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             // Convert string coordinates to numbers
             const lng = typeof d.longitude === 'string' ? parseFloat(d.longitude) : d.longitude;
             const lat = typeof d.latitude === 'string' ? parseFloat(d.latitude) : d.latitude;
-            console.log('🎯 Getting position for place:', d.name, [lng, lat]);
+            if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+              // eslint-disable-next-line no-console
+              console.log('Getting position for place');
+            }
             return [lng, lat];
           },
           getRadius: 12,
@@ -390,8 +356,16 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
     }
 
     // My Place Icon Layer - with home icon for better visibility
-    if (myPlace && isValidCoordinate(myPlaceLng, myPlaceLat)) {
-      console.log('🏠 Creating MyPlace icon layer for:', myPlace.name, [myPlaceLng, myPlaceLat]);
+    if (
+      myPlace &&
+      typeof myPlaceLng === 'number' &&
+      typeof myPlaceLat === 'number' &&
+      isValidCoordinate(myPlaceLng, myPlaceLat)
+    ) {
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('Creating MyPlace icon layer');
+      }
       layerList.push(
         new IconLayer({
           id: 'my-place-icon',
@@ -410,7 +384,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
             // Convert string coordinates to numbers
             const lng = typeof d.longitude === 'string' ? parseFloat(d.longitude) : d.longitude;
             const lat = typeof d.latitude === 'string' ? parseFloat(d.latitude) : d.latitude;
-            console.log('🏠 Getting position for myPlace:', d.name, [lng, lat]);
+            if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+              // eslint-disable-next-line no-console
+              console.log('Getting position for myPlace');
+            }
             return [lng, lat];
           },
           getSize: 40, // Large size for visibility
@@ -427,11 +404,10 @@ export const useDeckLayers = (onPlaceClick?: (place: Place, x: number, y: number
         })
       );
     } else {
-      console.log('❌ Cannot create myPlace layer:', {
-        myPlace: !!myPlace,
-        validCoords: myPlace ? isValidCoordinate(myPlaceLng, myPlaceLat) : false,
-        coords: myPlace ? [myPlaceLng, myPlaceLat] : null
-      });
+      if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('Cannot create myPlace layer');
+      }
     }
 
     return layerList;

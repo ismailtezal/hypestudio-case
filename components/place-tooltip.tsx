@@ -21,13 +21,11 @@ interface PlaceTooltipProps {
 
 export const PlaceTooltip: React.FC<PlaceTooltipProps> = React.memo(
   ({ place, onClose }) => {
-    const {
-      customerAnalysis,
-      visibleTradeAreas,
-      visibleHomeZipcodes,
-      setVisibleTradeAreas,
-      setVisibleHomeZipcodes,
-    } = useUIStore();
+    const customerAnalysis = useUIStore(s => s.customerAnalysis);
+    const visibleTradeAreas = useUIStore(s => s.visibleTradeAreas);
+    const visibleHomeZipcodes = useUIStore(s => s.visibleHomeZipcodes);
+    const setVisibleTradeAreas = useUIStore(s => s.setVisibleTradeAreas);
+    const setVisibleHomeZipcodes = useUIStore(s => s.setVisibleHomeZipcodes);
 
     const { data: tradeAreas = [] } = useTradeAreas();
     const { data: homeZipcodes = [] } = useHomeZipcodes();

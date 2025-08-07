@@ -23,15 +23,13 @@ const MapView: React.FC = React.memo(() => {
 
   const { isLoading, error, progress } = useProgressData();
   const { data: myPlace } = useMyPlace();
-  const {
-    viewState,
-    setViewState,
-    visibleTradeAreas,
-    setVisibleTradeAreas,
-    visibleHomeZipcodes,
-    setVisibleHomeZipcodes,
-    customerAnalysis,
-  } = useUIStore();
+  const viewState = useUIStore(s => s.viewState);
+  const setViewState = useUIStore(s => s.setViewState);
+  const visibleTradeAreas = useUIStore(s => s.visibleTradeAreas);
+  const setVisibleTradeAreas = useUIStore(s => s.setVisibleTradeAreas);
+  const visibleHomeZipcodes = useUIStore(s => s.visibleHomeZipcodes);
+  const setVisibleHomeZipcodes = useUIStore(s => s.setVisibleHomeZipcodes);
+  const customerAnalysis = useUIStore(s => s.customerAnalysis);
 
   const handlePlaceClick = React.useCallback((place: Place, x: number, y: number) => {
     setTooltipInfo({ place, x, y });

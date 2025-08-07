@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../lib/db';
+import { jsonWithETag } from '../../../lib/http';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const result = await db.execute(`
       SELECT id, polygon
@@ -9,12 +10,18 @@ export async function GET() {
       ORDER BY id ASC
     `);
 
-    const zipcodes = result.rows.map(row => ({
-      id: row.id,
-      polygon: row.polygon // PostgreSQL JSONB automatically parses JSON
-    }));
+    const zipcodes = result.rows.map(row => {
+      const polygon = typeof row.polygon === 'string' ? JSON.parse(row.polygon) : row.polygon;
+      return {
+        id: row.id,
+        polygon,
+      };
+    });
 
-    return NextResponse.json(zipcodes);
+    return jsonWithETag(request, zipcodes, {
+      'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200',
+      'Content-Type': 'application/json',
+    });
   } catch (error) {
     console.error('Error fetching zipcodes:', error);
     return NextResponse.json(

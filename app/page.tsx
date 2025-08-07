@@ -10,7 +10,10 @@ import LeftSidebar from '../components/left-sidebar';
 import RightSidebar from '../components/right-sidebar';
 
 export default function Home() {
-  const { leftSidebarOpen, rightSidebarOpen, setLeftSidebarOpen, setRightSidebarOpen } = useUIStore();
+  const leftSidebarOpen = useUIStore(s => s.leftSidebarOpen);
+  const rightSidebarOpen = useUIStore(s => s.rightSidebarOpen);
+  const setLeftSidebarOpen = useUIStore(s => s.setLeftSidebarOpen);
+  const setRightSidebarOpen = useUIStore(s => s.setRightSidebarOpen);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>

@@ -50,14 +50,14 @@ const fetchAllPlaces = async (): Promise<Place[]> => {
   return [myPlace, ...competitors];
 };
 
-// Trade areas with real chunked progress tracking
+// Trade areas with real chunked progress tracking (NDJSON)
 const fetchTradeAreasWithProgress = async (
   onProgress: (progress: number, status: string) => void
 ): Promise<TradeArea[]> => {
   onProgress(5, 'Connecting to trade areas API...');
   
   try {
-    // Use streaming endpoint for better performance
+    // Use streaming endpoint for better performance (NDJSON)
     const response = await fetch('/api/trade-areas/stream?batch_size=500');
     
     if (!response.ok) {
@@ -86,8 +86,9 @@ const fetchTradeAreasWithProgress = async (
     }
     
     const decoder = new TextDecoder();
-    let receivedData = '';
+    let buffer = '';
     let receivedBytes = 0;
+    const features: TradeArea[] = [];
     
     console.log('📡 Starting to read streaming data...');
     
@@ -96,12 +97,27 @@ const fetchTradeAreasWithProgress = async (
       if (done) break;
       
       receivedBytes += value.length;
-      const chunk = decoder.decode(value, { stream: false });
-      receivedData += chunk;
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
       
-      // Debug first few chunks
-      if (receivedBytes < 5000) {
-        console.log('📡 Chunk received:', chunk.substring(0, 100));
+      // Process complete lines (NDJSON)
+      let lastNewline = buffer.lastIndexOf('\n');
+      if (lastNewline >= 0) {
+        const lines = buffer.slice(0, lastNewline).split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const obj = JSON.parse(trimmed);
+            // Validate minimal shape
+            if (obj && typeof obj === 'object' && 'pid' in obj && 'trade_area' in obj) {
+              features.push(obj as TradeArea);
+            }
+          } catch {
+            // ignore malformed lines
+          }
+        }
+        buffer = buffer.slice(lastNewline + 1);
       }
       
       // Calculate progress based on bytes received
@@ -115,25 +131,27 @@ const fetchTradeAreasWithProgress = async (
       }
       
       const mbReceived = (receivedBytes / 1024 / 1024).toFixed(1);
-      onProgress(Math.max(20, progress), `Downloading trade areas... (${mbReceived}MB)`);
+      onProgress(Math.max(20, progress), `Downloading trade areas... (${mbReceived}MB, ${features.length} items)`);
     }
     
-    onProgress(95, 'Processing JSON data...');
+    onProgress(95, 'Finalizing streamed data...');
     
-    console.log('📊 Raw received data length:', receivedData.length);
-    console.log('📊 First 200 chars:', receivedData.substring(0, 200));
-    console.log('📊 Last 200 chars:', receivedData.substring(receivedData.length - 200));
-    
-    let features;
-    try {
-      const data = JSON.parse(receivedData);
-      features = Array.isArray(data) ? data : (data.features || data || []);
-      console.log('📊 Parsed features count:', features.length);
-      console.log('📊 Sample feature:', features[0]);
-    } catch (parseError) {
-      console.error('❌ JSON Parse Error:', parseError);
-      console.error('❌ Problematic data:', receivedData.substring(0, 500));
-      throw new Error(`Failed to parse trade areas data: ${parseError}`);
+    // Process remaining buffer
+    const tail = buffer.trim();
+    if (tail) {
+      const lines = tail.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const obj = JSON.parse(trimmed);
+          if (obj && typeof obj === 'object' && 'pid' in obj && 'trade_area' in obj) {
+            features.push(obj as TradeArea);
+          }
+        } catch {
+          // ignore malformed
+        }
+      }
     }
     
     onProgress(100, `Loaded ${features.length} trade areas successfully`);

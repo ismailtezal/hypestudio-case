@@ -1,8 +1,4 @@
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config({ path: '.env.local' });
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -42,32 +38,6 @@ export const db = {
     }
   },
 
-  // New method for prepared statements (better performance for repeated queries)
-  async executePrepared(name: string, sql: string, params?: any[]) {
-    const client = await pgPool.connect();
-    try {
-      // Prepare statement if not already prepared
-      await client.query(`PREPARE ${name} AS ${sql}`);
-      const result = await client.query(`EXECUTE ${name}(${params?.map((_, i) => `$${i + 1}`).join(',') || ''})`, params);
-      return {
-        rows: result.rows,
-        rowCount: result.rowCount,
-      };
-    } catch (error) {
-      // If statement already exists, just execute it
-      if ((error as any).code === '42P05') {
-        const result = await client.query(`EXECUTE ${name}(${params?.map((_, i) => `$${i + 1}`).join(',') || ''})`, params);
-        return {
-          rows: result.rows,
-          rowCount: result.rowCount,
-        };
-      }
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
   async transaction() {
     const client = await pgPool.connect();
     await client.query('BEGIN');
@@ -100,35 +70,3 @@ export const db = {
   }
 };
 
-// Simple in-memory cache for API responses
-const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
-
-export const getFromCache = (key: string) => {
-  const cached = cache.get(key);
-  if (!cached) return null;
-  
-  if (Date.now() - cached.timestamp > cached.ttl) {
-    cache.delete(key);
-    return null;
-  }
-  
-  return cached.data;
-};
-
-export const setCache = (key: string, data: any, ttlSeconds: number = 300) => {
-  cache.set(key, {
-    data,
-    timestamp: Date.now(),
-    ttl: ttlSeconds * 1000,
-  });
-};
-
-// Clear cache periodically to prevent memory leaks
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of cache.entries()) {
-    if (now - value.timestamp > value.ttl) {
-      cache.delete(key);
-    }
-  }
-}, 60000); // Clean every minute
